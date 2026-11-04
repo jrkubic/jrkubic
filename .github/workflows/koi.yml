@@ -1,5 +1,10 @@
 # Draws a pixel-art koi from this account's public GitHub activity, nightly.
-# See https://github.com/yalongwastaken/git-koi
+# See https://github.com/yalongwastaken/git-koi.
+#
+# Until the pond (lily pads for the week's issues, rocks for its pull requests)
+# is released upstream, this builds git-koi from the `pond` branch of the
+# jrkubic/git-koi fork instead of using the published Action. Switch back to
+# `yalongwastaken/git-koi@v1` once a release carries it.
 name: Koi
 
 on:
@@ -20,10 +25,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: yalongwastaken/git-koi@v1
+      - name: Check out git-koi with the pond
+        uses: actions/checkout@v7
         with:
-          body: asagi
-          output-dir: koi
+          repository: jrkubic/git-koi
+          ref: pond
+          path: git-koi
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: git-koi
+      - name: Build git-koi
+        run: cargo +stable build --release --locked --manifest-path git-koi/Cargo.toml
+      - name: Collect the account snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git-koi/target/release/git-koi collect "$GITHUB_REPOSITORY_OWNER" \
+            --output "$RUNNER_TEMP/koi-snapshot.json"
+      - name: Render the koi
+        run: |
+          git-koi/target/release/git-koi render "$RUNNER_TEMP/koi-snapshot.json" \
+            --output-dir koi --body asagi
       - name: Commit the koi if it changed
         shell: bash
         run: |
